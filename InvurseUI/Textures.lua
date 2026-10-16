@@ -34,7 +34,8 @@ local function StyleManaBar(manaBar)
     manaBar:SetStatusBarTexture(texture)
 
     local _, powerToken, altR, altG, altB = UnitPowerType(manaBar.unit)
-    local info = PowerBarColor and (PowerBarColor[powerToken] or PowerBarColor.MANA)
+    powerToken = ns.Known(powerToken) -- a secret can't be used as a table key
+    local info = PowerBarColor and (powerToken and PowerBarColor[powerToken] or PowerBarColor.MANA)
     if info and info.r then
         manaBar:SetStatusBarColor(info.r, info.g, info.b)
     elseif altR then
@@ -50,9 +51,10 @@ local HEALTH_GREEN = { r = 0.0, g = 1.0, b = 0.0 } -- the classic unit frame gre
 local DISCONNECTED_GREY = { r = 0.5, g = 0.5, b = 0.5 }
 
 local function GetHealthColor(unit)
-    if not UnitIsConnected(unit) then return DISCONNECTED_GREY end
-    if ns.db.textures.healthColor == "class" and UnitIsPlayer(unit) then
-        local _, class = UnitClass(unit)
+    local Known = ns.Known -- secret answers count as unknown
+    if Known(UnitIsConnected(unit)) == false then return DISCONNECTED_GREY end
+    if ns.db.textures.healthColor == "class" and Known(UnitIsPlayer(unit)) then
+        local class = Known(select(2, UnitClass(unit)))
         local color = class and RAID_CLASS_COLORS[class]
         if color then return color end
     end
@@ -156,11 +158,11 @@ end
 
 ns.OnInit(function()
     RememberApplied()
-    hooksecurefunc("UnitFrameHealthBar_Update", StyleHealthBar)
-    hooksecurefunc("UnitFrameManaBar_UpdateType", StyleManaBar)
-    if UnitFrameManaBar_UpdateTypeOld then hooksecurefunc("UnitFrameManaBar_UpdateTypeOld", StyleManaBar) end
-    hooksecurefunc("DefaultCompactUnitFrameSetup", StyleCompactFrame)
-    if DefaultCompactMiniFrameSetup then hooksecurefunc("DefaultCompactMiniFrameSetup", StyleCompactFrame) end
+    ns.HookGlobal("UnitFrameHealthBar_Update", StyleHealthBar)
+    ns.HookGlobal("UnitFrameManaBar_UpdateType", StyleManaBar)
+    ns.HookGlobal("UnitFrameManaBar_UpdateTypeOld", StyleManaBar)
+    ns.HookGlobal("DefaultCompactUnitFrameSetup", StyleCompactFrame)
+    ns.HookGlobal("DefaultCompactMiniFrameSetup", StyleCompactFrame)
     HookDamageMeter()
 
     ns.On("ADDON_LOADED", function(_, name)
