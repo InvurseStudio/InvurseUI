@@ -2,7 +2,7 @@
 ## Title: InvurseUI
 ## Notes: Subtle tweaks to the stock UI: threat glow nameplates, flat bar textures and custom fonts.
 ## Author: Invurse Studio
-## Version: 2.0
+## Version: 2.1
 ## SavedVariables: InvurseUIDB
 ## OptionalDeps: LibSharedMedia-3.0
 
