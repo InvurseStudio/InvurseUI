@@ -70,9 +70,16 @@ end
 local eventFrame = CreateFrame("Frame")
 local handlers = {}
 
+-- Registering an event the client doesn't know is an error, so skip those.
+local function IsEventValid(event)
+    if C_EventUtils and C_EventUtils.IsEventValid then return C_EventUtils.IsEventValid(event) end
+    return true
+end
+
 -- Registers fn(event, ...) for an event. Several modules can share one event.
 function ns.On(event, fn)
     if not handlers[event] then
+        if not IsEventValid(event) then return end
         handlers[event] = {}
         eventFrame:RegisterEvent(event)
     end
@@ -114,6 +121,23 @@ function ns.Print(msg)
     print("|cff33ff66InvurseUI:|r " .. msg)
 end
 local Print = ns.Print
+
+-- Unit APIs can return "secret" values (Midnight's addon restrictions, also on Forever).
+-- Comparing, indexing or doing math on one is a Lua error, so treat them as unknown.
+function ns.IsSecret(value)
+    return issecretvalue ~= nil and issecretvalue(value)
+end
+
+-- Returns value, or nil when it's secret.
+function ns.Known(value)
+    if ns.IsSecret(value) then return nil end
+    return value
+end
+
+-- hooksecurefunc on a global that a client build has removed is an error; skip those.
+function ns.HookGlobal(name, fn)
+    if type(_G[name]) == "function" then hooksecurefunc(name, fn) end
+end
 
 -- Some changes (like going back to Blizzard's bar textures) are only clean after a reload.
 StaticPopupDialogs["INVURSEUI_RELOAD"] = {

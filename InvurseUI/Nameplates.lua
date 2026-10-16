@@ -17,17 +17,20 @@ local activeUnits = {} -- [unitToken] = nameplate
 -- Threat -> color
 ---------------------------------------------------------------------------
 
+-- Secret values come back as nil (unknown), so an unknown answer never shows a glow.
+local Known = ns.Known
+
 local function IsGroupMember(unit)
-    return UnitIsUnit(unit, "pet") or UnitInParty(unit) or UnitInRaid(unit)
+    return Known(UnitIsUnit(unit, "pet")) or Known(UnitInParty(unit)) or Known(UnitInRaid(unit))
 end
 
 local function GetThreatColor(unit)
-    if not UnitCanAttack("player", unit) or UnitIsDeadOrGhost(unit) then return end
+    if not Known(UnitCanAttack("player", unit)) or Known(UnitIsDeadOrGhost(unit)) then return end
     local colors = db.colors
 
     -- 3 = securely tanking, 2 = tanking but about to lose it,
-    -- 1 = not tanking but above the tank, 0 = not tanking. nil = not on its threat table.
-    local status = UnitThreatSituation("player", unit)
+    -- 1 = not tanking but above the tank, 0 = not tanking. nil = not on its threat table (or secret).
+    local status = Known(UnitThreatSituation("player", unit))
 
     if db.mode == "dps" then
         if status == 3 or status == 2 then return colors.danger end
@@ -40,9 +43,9 @@ local function GetThreatColor(unit)
     if status == 0 then return colors.danger end
 
     -- Not on its threat table yet, but it's already beating on a groupmate.
-    if UnitAffectingCombat(unit) then
+    if Known(UnitAffectingCombat(unit)) then
         local target = unit .. "target"
-        if UnitExists(target) and not UnitIsUnit(target, "player") and IsGroupMember(target) then
+        if Known(UnitExists(target)) and Known(UnitIsUnit(target, "player")) == false and IsGroupMember(target) then
             return colors.danger
         end
     end
@@ -150,44 +153,71 @@ end
 local function GetLevelText(frame)
     local unit = frame.unit
     local level = UnitEffectiveLevel(unit)
+    if ns.IsSecret(level) then
+        return level .. "" -- can only be shown as is, without the difficulty color
+    end
     if not level or level <= 0 then
         return "|cffff2020??|r" -- too high to tell, like the skull icon
     end
 
     -- Same colors as Blizzard's level box.
     local color = UNIT_LEVEL_NON_ATTACKABLE or NORMAL_FONT_COLOR
-    if UnitCanAttack("player", unit) then
+    local playerLevel = Known(UnitEffectiveLevel("player"))
+    if playerLevel and Known(UnitCanAttack("player", unit)) then
         local levelFrame = frame.PlayerLevelDiffFrame
         if levelFrame and levelFrame.GetDifficultyColor then
-            color = levelFrame:GetDifficultyColor(level - UnitEffectiveLevel("player"))
+            color = levelFrame:GetDifficultyColor(level - playerLevel)
         elseif GetRelativeDifficultyColor then
-            color = GetRelativeDifficultyColor(UnitEffectiveLevel("player"), level)
+            color = GetRelativeDifficultyColor(playerLevel, level)
         end
     end
 
-    local classification = UnitClassification(unit)
+    local classification = Known(UnitClassification(unit))
     local elite = (classification == "elite" or classification == "rareelite" or classification == "worldboss") and "+" or ""
     return format("|cff%02x%02x%02x%d%s|r", color.r * 255, color.g * 255, color.b * 255, level, elite)
 end
 
-local function UpdateNameLevel(frame)
-    if not IsNamePlateFrame(frame) or not frame.name then return end
+-- Blizzard writes the plain name; we remember it so we can rebuild or restore it later.
+-- In combat that name can be a secret string, which can't be compared with what we
+-- wrote, so instead of comparing texts we catch every write that isn't ours.
+local writingName = false
+local UpdateNameLevel
 
-    -- Blizzard writes the plain name; remember it so we can rebuild or restore it later.
-    local current = frame.name:GetText()
-    if current and current ~= frame.iuiLevelName then
-        frame.iuiBaseName = current
-    end
+local function SetName(frame, text)
+    writingName = true
+    frame.name:SetText(text)
+    writingName = false
+end
+
+local function OnNameWritten(fontString)
+    if writingName then return end
+    local frame = fontString.iuiPlate
+    frame.iuiBaseName = fontString:GetText()
+    frame.iuiLevelShown = nil
+    UpdateNameLevel(frame)
+end
+
+local function HookName(frame)
+    local name = frame.name
+    if name.iuiPlate then return end
+    name.iuiPlate = frame
+    frame.iuiBaseName = name:GetText() -- not written by us yet, so it's Blizzard's
+    hooksecurefunc(name, "SetText", OnNameWritten)
+    hooksecurefunc(name, "SetFormattedText", OnNameWritten)
+end
+
+function UpdateNameLevel(frame)
+    if not IsNamePlateFrame(frame) or not frame.name then return end
+    HookName(frame)
     local base = frame.iuiBaseName
     if not base then return end
 
     if ShouldMoveLevel() then
-        local text = GetLevelText(frame) .. " - " .. base
-        frame.iuiLevelName = text
-        frame.name:SetText(text)
-    elseif current == frame.iuiLevelName then
-        frame.iuiLevelName = nil
-        frame.name:SetText(base)
+        SetName(frame, GetLevelText(frame) .. " - " .. base)
+        frame.iuiLevelShown = true
+    elseif frame.iuiLevelShown then
+        frame.iuiLevelShown = nil
+        SetName(frame, base)
     end
 end
 
@@ -233,7 +263,8 @@ local function ReclaimLevelSpace(unitFrame, opts)
     end
 
     -- Blizzard caps the name at the bar's width (or the level box); let "16 - Name" use what it needs.
-    local insideBar = opts.unitNameAnchorStyle == NamePlateConstants.NAME_ANCHOR_STYLES.InsideHealthBar
+    local anchorStyles = NamePlateConstants and NamePlateConstants.NAME_ANCHOR_STYLES
+    local insideBar = anchorStyles and opts.unitNameAnchorStyle == anchorStyles.InsideHealthBar
     if not insideBar and not (unitFrame.IsShowOnlyName and unitFrame:IsShowOnlyName()) then
         unitFrame.name:ClearAllPoints()
         unitFrame.name:SetPoint("BOTTOM", container, "TOP", 0, opts.healthBarToNameAboveSpacing)
@@ -291,7 +322,7 @@ local function SetUpNamePlate(unitFrame)
     UpdateNameLevel(unitFrame)
 end
 
-hooksecurefunc("CompactUnitFrame_UpdateName", UpdateNameLevel)
+ns.HookGlobal("CompactUnitFrame_UpdateName", UpdateNameLevel)
 
 -- Blizzard re-shows the level boxes whenever the level updates.
 local function OnLevelUpdated(frame)
@@ -299,10 +330,8 @@ local function OnLevelUpdated(frame)
     if ShouldMoveLevel() then HideLevelBoxes(frame) end
     UpdateNameLevel(frame)
 end
-hooksecurefunc("CompactUnitFrame_UpdateLevel", OnLevelUpdated)
-if CompactUnitFrame_UpdatePlayerLevelDiff then
-    hooksecurefunc("CompactUnitFrame_UpdatePlayerLevelDiff", OnLevelUpdated)
-end
+ns.HookGlobal("CompactUnitFrame_UpdateLevel", OnLevelUpdated)
+ns.HookGlobal("CompactUnitFrame_UpdatePlayerLevelDiff", OnLevelUpdated)
 
 ---------------------------------------------------------------------------
 -- Events
