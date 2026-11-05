@@ -72,8 +72,8 @@ Type `/iui` or go to **Esc → Options → AddOns → InvurseUI**. Each section 
 
 1. Download the latest release zip from the [releases page](https://github.com/InuvrseStudio/ForeverNameplates/releases/latest).
 2. Unzip it and copy the `InvurseUI` folder into your AddOns folder:
-   - **Windows:** `World of Warcraft\_classic_beta_\Interface\AddOns\`
-   - **macOS:** `/Applications/World of Warcraft/_classic_beta_/Interface/AddOns/`
+   - **Windows:** `World of Warcraft\_forever_\Interface\AddOns\`
+   - **macOS:** `/Applications/World of Warcraft/_forever_/Interface/AddOns/`
 3. If you had Forever Nameplates installed, delete its `ForeverNameplates` folder. Settings don't carry over.
 4. Restart the game (a `/reload` won't pick up a newly installed addon).
 
@@ -81,7 +81,7 @@ If the addon shows as *out of date* on the character select screen, tick **Load 
 
 ## Compatibility
 
-- Built for the World of Warcraft Forever beta (client 1.60.1, interface `16001`).
+- Built for World of Warcraft Forever (client 1.60.1, interface `16001`), checked against the launch build 1.60.1.70790.
 - Works with the default Blizzard UI. Nameplate or unit frame replacements such as Plater or ElvUI are not supported.
 
 ## License

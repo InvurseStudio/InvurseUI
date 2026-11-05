@@ -127,12 +127,13 @@ end
 
 local meterHooked = false
 local function HookDamageMeter()
-    if meterHooked or not DamageMeterSourceEntryMixin then return end
+    if meterHooked or not DamageMeterEntryMixin then return end
     meterHooked = true
     -- Entries are pooled and re-styled every time they're acquired; hooking the
-    -- mixins covers every entry created from here on.
-    for _, mixin in ipairs({ DamageMeterSourceEntryMixin, DamageMeterSpellEntryMixin }) do
-        if mixin and mixin.SetStyle then hooksecurefunc(mixin, "SetStyle", StyleMeterEntry) end
+    -- mixin covers every entry created from here on. SetStyle lives on the shared
+    -- base mixin (the source and spell entry mixins only add their own Init).
+    if DamageMeterEntryMixin.SetStyle then
+        hooksecurefunc(DamageMeterEntryMixin, "SetStyle", StyleMeterEntry)
     end
     StyleMeterWindows()
 end
